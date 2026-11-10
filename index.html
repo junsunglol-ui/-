@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>💧 WATER COLLECTOR</title>
+    <style>
+        :root { --bg: #0f172a; --panel: #1e293b; --accent: #38bdf8; --danger: #f43f5e; }
+        body { margin: 0; background: var(--bg); color: #fff; font-family: sans-serif; display: flex; flex-direction: column; align-items: center; }
+        .container { display: flex; gap: 20px; max-width: 700px; width: 100%; justify-content: center; flex-wrap: wrap; padding: 20px 10px; }
+        .game-area { background: var(--panel); padding: 15px; border-radius: 12px; text-align: center; }
+        canvas { background: #020617; border-radius: 8px; display: block; cursor: none; }
+        .ui-row { display: flex; justify-content: space-between; margin-bottom: 10px; font-size: 1.1rem; font-weight: bold; }
+        .btn { background: var(--accent); color: #0f172a; border: none; padding: 10px 20px; font-weight: bold; border-radius: 6px; cursor: pointer; margin-bottom: 10px; }
+        .leaderboard { background: var(--panel); padding: 20px; border-radius: 12px; min-width: 220px; flex: 1; }
+        .rank-item { display: flex; justify-content: space-between; padding: 8px 5px; border-bottom: 1px solid #334155; }
+        .rank-item:nth-child(1) { color: #f59e0b; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <h1>💧 WATER COLLECTOR</h1>
+    <div class="container">
+        <div class="game-area">
+            <div class="ui-row">
+                <div>점수: <span id="score" style="color:var(--accent)">0</span></div>
+                <div>생명: <span id="lives" style="color:var(--danger)">♥♥♥</span></div>
+            </div>
+            <button class="btn" onclick="startGame()">게임 시작</button>
+            <canvas id="gameCanvas" width="400" height="400"></canvas>
+        </div>
+        <div class="leaderboard">
+            <h3 style="margin-top:0; text-align:center;">🏆 탑 10 랭킹</h3>
+            <div id="rank-list"></div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById("gameCanvas"), ctx = canvas.getContext("2d");
+        let score = 0, lives = 3, gameActive = false, aniId, enemyTimer = 0, speedMult = 1;
+        let player = { x: 200, y: 350, r: 15 }, water = { x: 0, y: 0, r: 10 }, enemies = [];
+
+        canvas.addEventListener('mousemove', (e) => {
+            if (!gameActive) return;
+            const r = canvas.getBoundingClientRect();
+            player.x = e.clientX - r.left; player.y = e.clientY - r.top;
+        });
+        canvas.addEventListener('touchmove', (e) => {
+            if (!gameActive) return; e.preventDefault();
+            const r = canvas.getBoundingClientRect();
+            player.x = e.touches[0].clientX - r.left; player.y = e.touches[0].clientY - r.top;
+        }, { passive: false });
+
+        updateRankDisplay();
+        ctx.fillStyle = "#94a3b8"; ctx.font = "16px sans-serif"; ctx.textAlign = "center";
+        ctx.fillText("시작 버튼을 누르세요!", 200, 200);
+
+        function startGame() {
+            cancelAnimationFrame(aniId);
+            score = 0; lives = 3; enemies = []; speedMult = 1; enemyTimer = 0; gameActive = true;
+            document.getElementById("score").innerText = score;
+            document.getElementById("lives").innerText = "♥♥♥";
+            water.x = Math.random() * 360 + 20; water.y = Math.random() * 360 + 20;
+            gameLoop();
+        }
+
+        function gameLoop() {
+            if (!gameActive) return;
+            ctx.clearRect(0, 0, 400, 400);
+
+            // 물방울 그리기
+            ctx.beginPath(); ctx.arc(water.x, water.y, water.r, 0, Math.PI*2); ctx.fillStyle = '#60a5fa'; ctx.fill();
+            // 플레이어 그리기
+            ctx.beginPath(); ctx.arc(player.x, player.y, player.r, 0, Math.PI*2); ctx.fillStyle = '#38bdf8'; ctx.fill();
+
+            // 충돌 체크 (물방울)
+            if (Math.hypot(player.x - water.x, player.y - water.y) < player.r + water.r) {
+                score += 10; document.getElementById("score").innerText = score;
+                water.x = Math.random() * 360 + 20; water.y = Math.random() * 360 + 20;
+                speedMult += 0.05;
+            }
+
+            // 적 스폰 및 이동
+            if (++enemyTimer > Math.max(15, 40 - score/10)) {
+                enemies.push({ x: Math.random() * 400, y: -10, r: Math.random() * 6 + 8, s: (Math.random() * 2 + 2) * speedMult });
+                enemyTimer = 0;
+            }
+
+            for (let i = enemies.length - 1; i >= 0; i--) {
+                let e = enemies[i]; e.y += e.s;
+                ctx.beginPath(); ctx.arc(e.x, e.y, e.r, 0, Math.PI*2); ctx.fillStyle = '#f43f5e'; ctx.fill();
+
+                // 적 충돌 체크
+                if (Math.hypot(player.x - e.x, player.y - e.y) < player.r + e.r) {
+                    enemies.splice(i, 1); lives--;
+                    document.getElementById("lives").innerText = "♥".repeat(lives) + "♡".repeat(3-lives);
+                    if (lives <= 0) {
+                        gameActive = false; cancelAnimationFrame(aniId);
+                        ctx.fillStyle = "rgba(0,0,0,0.8)"; ctx.fillRect(0, 0, 400, 400);
+                        ctx.fillStyle = "#f43f5e"; ctx.font = "bold 30px sans-serif"; ctx.fillText("GAME OVER", 200, 190);
+                        ctx.fillStyle = "#fff"; ctx.font = "18px sans-serif"; ctx.fillText(`최종 점수: ${score}점`, 200, 230);
+                        setTimeout(() => {
+                            let name = prompt("랭킹에 등록할 이름을 입력하세요:", "플레이어");
+                            if (name) {
+                                let list = JSON.parse(localStorage.getItem("w_scores")) || [];
+                                list.push({ name, score }); list.sort((a,b) => b.score - a.score);
+                                localStorage.setItem("w_scores", JSON.stringify(list.slice(0, 10)));
+                                updateRankDisplay();
+                            }
+                        }, 300);
+                        return;
+                    }
+                    continue;
+                }
+                if (e.y > 420) enemies.splice(i, 1);
+            }
+            aniId = requestAnimationFrame(gameLoop);
+        }
+
+        function updateRankDisplay() {
+            const el = document.getElementById("rank-list"); el.innerHTML = "";
+            let list = JSON.parse(localStorage.getItem("w_scores")) || [];
+            if (list.length === 0) { el.innerHTML = "<div class='rank-item'>기록 없음</div>"; return; }
+            list.forEach((item, idx) => {
+                let cleanName = item.name.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+                el.innerHTML += `<div class='rank-item'><span>${idx + 1}위. ${cleanName}</span><span>${item.score}점</span></div>`;
+            });
+        }
+    </script>
+</body>
+</html>
